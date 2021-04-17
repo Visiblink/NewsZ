@@ -1,0 +1,9 @@
+{
+	"id": "com.visiblink.newsz",
+	"version": "0.1.0",
+	"vendor": "Shuswap",
+	"type": "web",
+	"main": "index.html",
+	"title": "NewsZ",
+	"icon": "icon.png"
+}
