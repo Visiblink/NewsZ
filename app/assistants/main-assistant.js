@@ -8,6 +8,7 @@ function MainAssistant() {
 	this._homeURL = "http://darkstar.x10host.com/news_31/index.html";
 	this._lastURL = this._homeURL;
 	this._baseURL = "http://darkstar.x10host.com/news_31/mobilizer/read.php/?a=";
+	this._prefsURL = "http://darkstar.x10host.com/news_31/preferences.html";
 }
 
 MainAssistant.prototype.setup = function() {
@@ -22,7 +23,7 @@ MainAssistant.prototype.setup = function() {
 	this.controller.setupWidget('web-view', {
 		url: this._homeURL,  /// SUBSTITUTE YOUR WEB ADDRESS HERE. THAT'S IT. EASY LIKE CAKE!
 		showClickedLink: true,
-		interrogateClicks: true,
+		interrogateClicks: false,
 	}, this.mainViewModel = {});
 
 	/* add app menu */
@@ -35,6 +36,7 @@ MainAssistant.prototype.setup = function() {
 		items: [
 			{label: "Home", command: 'do-Home'},
 			{label: "Reload", command: 'do-Reload'},
+			{label: "Preferences", command: 'do-Prefs'},
 			{label: "Share", command: 'do-Share'},
 		]
 	}); 
@@ -66,22 +68,26 @@ MainAssistant.prototype.activate = function(event) {
 	/* put in event handlers here that should only be in effect when this scene is active. For
 	   example, key handlers that are observing the document */
 
-	Mojo.Event.listen(this.controller.get("web-view"), Mojo.Event.webViewLinkClicked, this.handleUrlChanged.bind(this));
+	   Mojo.Event.listen(this.controller.get("web-view"), Mojo.Event.webViewTitleUrlChanged, this.titleUrlChanged.bind(this));
 };
 
 /* the following section enables the back gesture (or back Button on TouchPad) */
 MainAssistant.prototype.handleCommand = function(event) {
-	if (event.type == Mojo.Event.back || event.command == "do-Home") {
+	if (event.command == "do-Home") {
 		this._lastURL = this._homeURL;
 		this.controller.get('web-view').mojo.openURL(this._homeURL);
 		event.stop();
     }
-    if (event.type == Mojo.Event.back || event.command == "do-Back") {
+    else if (event.type == Mojo.Event.back || event.command == "do-Back") {
 		this.controller.get('web-view').mojo.goBack();
 		event.stop();
     }
 	else if (event.command == "do-Reload") {
 		this.controller.get('web-view').mojo.reloadPage();
+		event.stop();
+	}
+	else if (event.command == "do-Prefs") {
+		this.controller.get('web-view').mojo.openURL(this._prefsURL);
 		event.stop();
 	}
 	else if (event.command == "do-Share") {
@@ -90,18 +96,17 @@ MainAssistant.prototype.handleCommand = function(event) {
 	}
 };
 
-/* handle navigation so we can find out the url */
-MainAssistant.prototype.handleUrlChanged = function(event) {
-	if (event.url) {
-		Mojo.Log.info("Navigating to url: " + event.url);
+MainAssistant.prototype.titleUrlChanged = function(event) {
+	if (event.url != this._lastURL) {
+		Mojo.Log.info("URL Changed " + event.url);
 		this._lastURL = event.url;
-		this.controller.get('web-view').mojo.openURL(event.url);
 	}
+	event.stop();
 }
 
 /* share last url via email */
 MainAssistant.prototype.share = function(event) {
-	if (this._lastURL != this._homeURL) {
+	if (this._lastURL != this._homeURL && this._lastURL != this._prefsURL) {
 		var shareURL = this._lastURL.replace(this._baseURL, "");
 		shareURL = decodeURIComponent(shareURL);
 		Mojo.Log.info("Sharing decoded url of last visited article: " + shareURL);
@@ -125,7 +130,7 @@ MainAssistant.prototype.share = function(event) {
 MainAssistant.prototype.deactivate = function(event) {
 	/* remove any event handlers you added in activate and do any other cleanup that should happen before
 	   this scene is popped or another scene is pushed on top */
-	   Mojo.Event.stopListening(this.controller.get("web-view"), Mojo.Event.webViewLinkClicked, this.handleUrlChanged.bind(this));
+	   Mojo.Event.stopListening(this.controller.get("web-view"), Mojo.Event.webViewLinkClicked, this.handleWebViewNavigation.bind(this));
 };
 
 MainAssistant.prototype.cleanup = function(event) {
