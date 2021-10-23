@@ -5,6 +5,9 @@ function MainAssistant() {
 	   additional parameters (after the scene name) that were passed to pushScene. The reference
 	   to the scene controller (this.controller) has not be established yet, so any initialization
 	   that needs the scene controller should be done in the setup function below. */
+	this._homeURL = "http://darkstar.x10host.com/news_31/index.html";
+	this._lastURL = this._homeURL;
+	this._baseURL = "http://darkstar.x10host.com/news_31/mobilizer/read.php/?a=";
 }
 
 MainAssistant.prototype.setup = function() {
@@ -16,10 +19,42 @@ MainAssistant.prototype.setup = function() {
 
 	/* the next four lines, including the one I commented out, create the webview widget. */
 
-this.controller.setupWidget('web-view', {
-	url: "http://darkstar.x10host.com/news_31/index.html",  /// SUBSTITUTE YOUR WEB ADDRESS HERE. THAT'S IT. EASY LIKE CAKE!
-///	virtualpagewidth: 75
+	this.controller.setupWidget('web-view', {
+		url: this._homeURL,  /// SUBSTITUTE YOUR WEB ADDRESS HERE. THAT'S IT. EASY LIKE CAKE!
+		showClickedLink: true,
+		interrogateClicks: true,
 	}, this.mainViewModel = {});
+
+	/* add app menu */
+	this.controller.setupWidget(Mojo.Menu.appMenu,
+	this.attributes = {
+		omitDefaultItems: true
+	},
+	this.model = {
+		visible: true,
+		items: [
+			{label: "Home", command: 'do-Home'},
+			{label: "Reload", command: 'do-Reload'},
+			{label: "Share", command: 'do-Share'},
+		]
+	}); 
+
+	/* add command menu buttons on Touchpad */
+	var isTouchpad = false;
+	if (Mojo.Environment.DeviceInfo.platformVersionMajor >= 3)
+		isTouchpad = true;
+	this.controller.setupWidget(Mojo.Menu.commandMenu,
+		this.attributes = {
+			spacerHeight: 0,
+			menuClass: 'no-fade'
+		},
+		this.model = {
+			visible: isTouchpad,
+			items: [
+				{icon: "back", command: "do-Back"}
+			]
+		}
+	  ); 
 		
 	/* update the app info using values from our app */
 	
@@ -27,33 +62,76 @@ this.controller.setupWidget('web-view', {
 	
 };
 
-
-	/* the following section enables the back gesture */
-
-MainAssistant.prototype.handleCommand = function(event) {
-    if (event.type == Mojo.Event.back) {
-    this.controller.get('web-view').mojo.goBack();
-    event.stop();
-    }
-};
-
 MainAssistant.prototype.activate = function(event) {
 	/* put in event handlers here that should only be in effect when this scene is active. For
 	   example, key handlers that are observing the document */
+
+	Mojo.Event.listen(this.controller.get("web-view"), Mojo.Event.webViewLinkClicked, this.handleUrlChanged.bind(this));
 };
+
+/* the following section enables the back gesture (or back Button on TouchPad) */
+MainAssistant.prototype.handleCommand = function(event) {
+	if (event.type == Mojo.Event.back || event.command == "do-Home") {
+		this._lastURL = this._homeURL;
+		this.controller.get('web-view').mojo.openURL(this._homeURL);
+		event.stop();
+    }
+    if (event.type == Mojo.Event.back || event.command == "do-Back") {
+		this.controller.get('web-view').mojo.goBack();
+		event.stop();
+    }
+	else if (event.command == "do-Reload") {
+		this.controller.get('web-view').mojo.reloadPage();
+		event.stop();
+	}
+	else if (event.command == "do-Share") {
+		this.share(); 
+		event.stop();
+	}
+};
+
+/* handle navigation so we can find out the url */
+MainAssistant.prototype.handleUrlChanged = function(event) {
+	if (event.url) {
+		Mojo.Log.info("Navigating to url: " + event.url);
+		this._lastURL = event.url;
+		this.controller.get('web-view').mojo.openURL(event.url);
+	}
+}
+
+/* share last url via email */
+MainAssistant.prototype.share = function(event) {
+	if (this._lastURL != this._homeURL) {
+		var shareURL = this._lastURL.replace(this._baseURL, "");
+		shareURL = decodeURIComponent(shareURL);
+		Mojo.Log.info("Sharing decoded url of last visited article: " + shareURL);
+
+		var message = "Here's an article I think you might like: <br><br>" + shareURL;
+		this.controller.serviceRequest("palm://com.palm.applicationManager", {
+			method: 'open',
+			parameters: {
+				id: "com.palm.app.email",
+				params: {
+					summary: "Check out this article",
+					text: message
+				}
+			}
+		});
+	} else {
+		Mojo.Controller.errorDialog("Nothing to share yet! Load an article first...")
+	}
+}
 
 MainAssistant.prototype.deactivate = function(event) {
 	/* remove any event handlers you added in activate and do any other cleanup that should happen before
 	   this scene is popped or another scene is pushed on top */
+	   Mojo.Event.stopListening(this.controller.get("web-view"), Mojo.Event.webViewLinkClicked, this.handleUrlChanged.bind(this));
 };
 
 MainAssistant.prototype.cleanup = function(event) {
 	/* this function should do any cleanup needed before the scene is destroyed as 
 	   a result of being popped off the scene stack */
 
-	/* the last few lines clear the webview cache on exit -- otherwise the webview will always return cached versions of your pages and you'll never see updated versions */
-
-var mywebview = this.controller.get('web-view');
-mywebview.mojo.clearCache(); 
-
+	/* clear the webview cache on exit -- otherwise the webview will always return cached versions of your pages and you'll never see updated versions */
+	this.controller.get('web-view').mojo.clearCache(); 
 };
